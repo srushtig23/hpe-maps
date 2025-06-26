@@ -1,18 +1,20 @@
-// utils.js
-
 export function getStarRating(rating) {
   if (typeof rating !== 'number' || rating < 0 || rating > 10) {
     return {
       stars: 0,
-      display: 'Not rated'
+      display: 'Not rated',
+      exact: null
     };
   }
 
-  const stars = Math.round((11 - rating) / 2);
-  const clamped = Math.max(0, Math.min(5, stars));
+  const clampedRating = Math.max(0, Math.min(10, rating));
+  const stars = Math.round(clampedRating / 2);
+  const exact = (clampedRating / 2).toFixed(1);
+
   return {
-    stars: clamped,
-    display: '★'.repeat(clamped) + '☆'.repeat(5 - clamped)
+    stars,
+    display: '★'.repeat(stars) + '☆'.repeat(5 - stars),
+    exact
   };
 }
 

@@ -1,5 +1,3 @@
-// locationSearch.js
-
 import { addPopupMarker, map } from './mapRenderer.js';
 import { fetchCrimeData } from './dataService.js';
 import { getStarRating, areCoordsClose, showToast } from './utils.js';
@@ -21,15 +19,18 @@ export function getCurrentLocation() {
       const data = await response.json();
       const address = data.display_name || 'Your Location';
 
-      let rating = null;
+      let foundRatings = [];
       for (const entry of cachedCrimeData) {
         if (areCoordsClose(entry.latt, entry.long, latitude, longitude)) {
-          rating = 10 - entry.rating;
-          break;
+          foundRatings.push(entry.rating);
         }
       }
 
-      addPopupMarker(latitude, longitude, address, rating);
+      const averageRating = foundRatings.length
+        ? foundRatings.reduce((sum, r) => sum + r, 0) / foundRatings.length
+        : null;
+
+      addPopupMarker(latitude, longitude, address, averageRating);
     } catch (err) {
       console.error('Reverse geocoding failed:', err);
       addPopupMarker(latitude, longitude, 'Your Location', null);
@@ -40,20 +41,7 @@ export function getCurrentLocation() {
 async function initCrimeData() {
   cachedCrimeData = await fetchCrimeData();
 
-  // Add fallback text tooltips for locations not rated
-  const heatPoints = [];
-  cachedCrimeData.forEach(({ latt, long, rating }) => {
-    if (typeof latt === 'number' && typeof long === 'number' && typeof rating === 'number') {
-      const avg = (11 - rating) / 2;
-      if (avg < 3) {
-        heatPoints.push([latt, long, (11 - avg * 2) / 10]);
-      }
-    }
-  });
-
-  if (!heatPoints.length) {
-    console.warn('No heatmap points available.');
-  }
+  // You can optionally pre-process heatmap data here
 }
 
 function showLoading(isLoading) {
@@ -115,15 +103,18 @@ export async function searchLocation() {
     const lonNum = parseFloat(lon);
     map.setView([latNum, lonNum], 14);
 
-    let rating = null;
+    let foundRatings = [];
     for (const entry of cachedCrimeData) {
       if (areCoordsClose(entry.latt, entry.long, latNum, lonNum)) {
-        rating = 10 - entry.rating;
-        break;
+        foundRatings.push(entry.rating);
       }
     }
 
-    addPopupMarker(latNum, lonNum, display_name, rating);
+    const averageRating = foundRatings.length
+      ? foundRatings.reduce((sum, r) => sum + r, 0) / foundRatings.length
+      : null;
+
+    addPopupMarker(latNum, lonNum, display_name, averageRating);
   } catch (err) {
     console.error('Search error:', err);
     showToast('Search failed. Please try again.');

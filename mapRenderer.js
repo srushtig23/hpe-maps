@@ -1,5 +1,3 @@
-// mapRenderer.js
-
 import { getCurrentLocation } from './locationSearch.js';
 import { getStarRating, sleep } from './utils.js';
 import { fetchCrimeData } from './dataService.js';
@@ -11,12 +9,13 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 }).addTo(map);
 
 export function addPopupMarker(lat, lon, address, rating = null) {
-  let starInfo = rating !== null ? getStarRating(rating) : null;
+  const starInfo = rating !== null ? getStarRating(rating) : null;
+
   const popupHtml = rating !== null
     ? `<div class="max-w-xs">
          <b>${address}</b><br>
          <span class="text-yellow-500 text-lg">${starInfo.display}</span>
-         <span class="text-sm">(${starInfo.stars}/5)</span>
+         <span class="text-sm">(${starInfo.exact})</span>
        </div>`
     : `<div class="max-w-xs">
          <b>${address}</b><br>
@@ -30,9 +29,9 @@ async function addTooltipMarker(lat, lon, avgRating, delay = 0) {
   await sleep(delay);
 
   const location = `(${lat.toFixed(3)}, ${lon.toFixed(3)})`;
-  const stars = Math.round((11 - avgRating) / 2);
-  const goldStars = `<span style="color: #FFD700;">${'★'.repeat(stars)}${'☆'.repeat(5 - stars)}</span>`;
-  const displayRating = ((11 - avgRating) / 2).toFixed(2);
+  const starInfo = getStarRating(avgRating);
+
+  const popupHtml = `<b>${location}</b><br>Rating: <span style="color: #FFD700;">${starInfo.display}</span> <b>(${starInfo.exact})</b>`;
 
   const circle = L.circle([lat, lon], {
     radius: 5000,
@@ -43,7 +42,6 @@ async function addTooltipMarker(lat, lon, avgRating, delay = 0) {
     zIndexOffset: 1000
   }).addTo(map);
 
-  const popupHtml = `<b>${location}</b><br>Rating: ${goldStars} <b>(${displayRating})</b>`;
   circle.bindPopup(popupHtml, { closeOnClick: false });
 
   circle.on('mouseover', function () {
@@ -58,42 +56,74 @@ async function loadCrimeDataFromSupabase() {
   const data = await fetchCrimeData();
   const locationMap = new Map();
 
+  // Group ratings by rounded coordinates
   data.forEach(({ latt, long, rating }) => {
+    if (
+      typeof latt !== "number" ||
+      typeof long !== "number" ||
+      typeof rating !== "number" ||
+      rating < 0 || rating > 10
+    ) return;
+
     const key = `${latt.toFixed(9)}_${long.toFixed(9)}`;
-    const adjustedRating = (11 - rating) / 2;
 
     if (!locationMap.has(key)) {
-      locationMap.set(key, { latt, long, ratings: [adjustedRating] });
+      locationMap.set(key, { latt, long, ratings: [rating] });
     } else {
-      locationMap.get(key).ratings.push(adjustedRating);
+      locationMap.get(key).ratings.push(rating);
     }
   });
 
   const unsafePoints = [];
+  const safePoints = [];
+
   locationMap.forEach(({ latt, long, ratings }) => {
     const avgRating = ratings.reduce((sum, r) => sum + r, 0) / ratings.length;
-    if (avgRating < 3) {
-      unsafePoints.push([latt, long, (11 - avgRating * 2) / 10]);
-      addTooltipMarker(latt, long, 11 - avgRating * 2);
+
+    if (avgRating <= 5) {
+      // Unsafe
+      const intensity = avgRating / 10;
+      unsafePoints.push([latt, long, intensity]);
+      addTooltipMarker(latt, long, avgRating);
+    } else {
+      // Safe
+      const intensity = avgRating / 10;
+      safePoints.push([latt, long, intensity]);
+      addTooltipMarker(latt, long, avgRating);
     }
   });
 
+  // Red heat for unsafe
   if (unsafePoints.length) {
     L.heatLayer(unsafePoints, {
       radius: 25,
       blur: 15,
-      minOpacity: 0.6,
+      minOpacity: 0.5,
       gradient: {
-        0.0: '#00ff00',
-        0.5: '#ffff00',
+        0.0: '#ffcccc',
+        0.5: '#ff6666',
         1.0: '#ff0000'
       },
       zIndex: 500
-    }, { willReadFrequently: true }).addTo(map);
-  } else {
-    console.warn('No unsafe points found for heatmap');
+    }).addTo(map);
+  }
+
+  // Green heat for safe
+  if (safePoints.length) {
+    L.heatLayer(safePoints, {
+      radius: 25,
+      blur: 15,
+      minOpacity: 0.3,
+      gradient: {
+        0.0: '#ccffcc',
+        0.5: '#66ff66',
+        1.0: '#00cc00'
+      },
+      zIndex: 499 // Keep below unsafe markers
+    }).addTo(map);
   }
 }
+
 
 loadCrimeDataFromSupabase();
 
