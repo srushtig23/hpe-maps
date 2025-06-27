@@ -2,14 +2,14 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=2.0, user-scalable=yes" />
+  <!-- Fix: Prevent zooming and scaling on double-click/tap -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Safety Map</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="style.css" />
 </head>
 
-<!-- Set a transparent background so map is visible behind blurred elements -->
 <body class="font-sans h-screen overflow-hidden bg-transparent">
 
   <!-- Controls: search bar floating over map with blur -->
@@ -54,6 +54,15 @@
 
   <!-- Map -->
   <div id="map" class="h-full w-full z-0"></div>
+
+  <!-- Prevent fullscreen from hiding navbar (in case of video/map) -->
+  <script>
+    document.addEventListener("fullscreenchange", () => {
+      if (document.fullscreenElement) {
+        document.exitFullscreen();
+      }
+    });
+  </script>
 
   <!-- Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
