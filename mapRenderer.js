@@ -51,12 +51,14 @@ async function addTooltipMarker(lat, lon, avgRating, delay = 0) {
     this.closePopup();
   });
 }
-
+export function resetMapView() {
+  map.setView([12.9716, 77.5946], 6); // Reset to original view
+}
 async function loadCrimeDataFromSupabase() {
   const data = await fetchCrimeData();
   const locationMap = new Map();
 
-  // Group ratings by rounded coordinates
+  // Group ratings by location
   data.forEach(({ latt, long, rating }) => {
     if (
       typeof latt !== "number" ||
@@ -75,25 +77,31 @@ async function loadCrimeDataFromSupabase() {
   });
 
   const unsafePoints = [];
+  const moderatePoints = [];
   const safePoints = [];
 
   locationMap.forEach(({ latt, long, ratings }) => {
     const avgRating = ratings.reduce((sum, r) => sum + r, 0) / ratings.length;
 
-    if (avgRating <= 5) {
+    // Tooltip for all types
+    addTooltipMarker(latt, long, avgRating);
+
+    if (avgRating <= 4) {
       // Unsafe
       const intensity = avgRating / 10;
       unsafePoints.push([latt, long, intensity]);
-      addTooltipMarker(latt, long, avgRating);
+    } else if (avgRating > 4 && avgRating < 7) {
+      // Moderate
+      const intensity = avgRating / 10;
+      moderatePoints.push([latt, long, intensity]);
     } else {
       // Safe
       const intensity = avgRating / 10;
       safePoints.push([latt, long, intensity]);
-      addTooltipMarker(latt, long, avgRating);
     }
   });
 
-  // Red heat for unsafe
+  // 🔴 Red heat layer (unsafe)
   if (unsafePoints.length) {
     L.heatLayer(unsafePoints, {
       radius: 25,
@@ -108,7 +116,22 @@ async function loadCrimeDataFromSupabase() {
     }).addTo(map);
   }
 
-  // Green heat for safe
+  // 🟡 Yellow heat layer (moderate)
+  if (moderatePoints.length) {
+    L.heatLayer(moderatePoints, {
+      radius: 25,
+      blur: 15,
+      minOpacity: 0.4,
+      gradient: {
+        0.0: '#fffccf',
+        0.5: '#ffeb88',
+        1.0: '#ffd700'
+      },
+      zIndex: 499
+    }).addTo(map);
+  }
+
+  // 🟢 Green heat layer (safe)
   if (safePoints.length) {
     L.heatLayer(safePoints, {
       radius: 25,
@@ -119,10 +142,11 @@ async function loadCrimeDataFromSupabase() {
         0.5: '#66ff66',
         1.0: '#00cc00'
       },
-      zIndex: 499 // Keep below unsafe markers
+      zIndex: 498
     }).addTo(map);
   }
 }
+
 
 
 loadCrimeDataFromSupabase();
